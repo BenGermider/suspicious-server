@@ -1,3 +1,4 @@
+import json
 import socket
 import logging
 import os
@@ -6,6 +7,10 @@ import sys
 import threading
 import time
 
+import asyncio
+
+from src.rabbitmq.rabbitmqinterface import RabbitMQInterface
+from src.utils import send_log
 
 # Configure basic logging
 logging.basicConfig(
@@ -28,6 +33,7 @@ class Client:
         self.port = PORT
         self.socket = socket.socket()
         self.context = ssl.create_default_context()
+        self.rmq_interface = RabbitMQInterface()
 
     def start(self):
         self._connect()
@@ -35,22 +41,29 @@ class Client:
 
     def _connect(self):
         self.socket.connect((self.host, self.port))
+        asyncio.run(self.rmq_interface.connect())
+
 
     def read_commands(self):
         while True:
             with self.context.wrap_socket(self.socket, server_hostname=self.host) as secure_socket:
                 command = secure_socket.recv(1024)
-                logger.debug(f"Received {command}")
-                self._obey(command)
+                send_log(f"Client received {command}", self, "debug")
+
+                command = command.decode()
+                if command == "heartbeat":
+                    self.socket.send(b"alive")
+                else:
+                    self._obey(command)
 
     def _obey(self, command):
-        succeeded = 1
+        succeeded = 1  # Basic output
         try:
             if command.lower().startswith("echo"):
                 command = command.replace("echo", "", 1)
                 print(command)
         finally:
-            self.socket.send(f"Report {succeeded}".encode())
+            self.socket.send(json.dumps({"command": command, "output": succeeded}).encode())
 
 def main():
 
