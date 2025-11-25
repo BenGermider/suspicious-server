@@ -1,6 +1,7 @@
 import socket
 import logging
 import sys
+import ssl
 import time
 import threading
 from fastapi import FastAPI
@@ -27,10 +28,16 @@ class Server:
         self.port = port
         self.connections = {}
         self.running = False
+        self.context = None
 
     def start(self):
         self.running = True
         threading.Thread(target=self._run, daemon=True).start()
+
+    def _ssl_context(self):
+        self.context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        self.context.load_cert_chain(certfile="server.crt", keyfile="server.key")
+
 
     def _run(self):
         s = socket.socket()
@@ -38,9 +45,10 @@ class Server:
         s.listen()
         logger.info(f"Server listening on {self.host}:{self.port}")
         while self.running:
-            conn, addr = s.accept()
-            self.connections[addr] = conn
-            logger.info(f"Received connection from client {addr}")
+            with self.context.wrap_socket(s, server_side=True) as secure_socket:
+                conn, addr = secure_socket.accept()
+                self.connections[addr] = conn
+                logger.info(f"Received connection from client {addr}")
 
 
     def get_clients(self):

