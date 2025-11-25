@@ -60,3 +60,5 @@ networks:
   c2:
     driver: bridge
 
+volumes:
+  esdata:
