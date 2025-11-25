@@ -1,3 +1,4 @@
+import uvicorn
 import ssl
 import asyncio
 import logging
@@ -10,7 +11,6 @@ from fastapi import FastAPI
 from src.rabbitmq.rabbitmqinterface import RabbitMQInterface
 from src.utils import send_log, send_command
 
-app = FastAPI()
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -104,8 +104,7 @@ class Server:
 
 
 server = Server(HOST, PORT)
-asyncio.create_task(server.start_server())
-
+app = FastAPI()
 
 @app.post("/command", status_code=200)
 def command(cmd: str):
@@ -113,3 +112,15 @@ def command(cmd: str):
     if cmd == "display clients":
         return {"result": server.get_clients()}
     return {"result": server.send_command_client(cmd)}
+
+
+
+async def main():
+    tcp_task = asyncio.create_task(server.start_server())
+    api_config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="debug")
+    api_server = uvicorn.Server(api_config)
+    api_task = asyncio.create_task(api_server.serve())
+    await asyncio.gather(tcp_task, api_task)
+
+if __name__ == "__main__":
+    asyncio.run(main())
