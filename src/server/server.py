@@ -51,12 +51,14 @@ class Server:
     async def _evict_dead(self) -> None:
         now = datetime.now()
         timeout = timedelta(seconds=30)
-        for addr, last_alive in self.heartbeats_timestamps.items():
-            if now - last_alive > timeout:
-                conn = self.connections[addr]
-                conn.close()
-                del self.connections[addr]
-                del self.heartbeats_timestamps[addr]
+        while True:
+            time.sleep(30)
+            for addr, last_alive in self.heartbeats_timestamps.items():
+                if now - last_alive > timeout:
+                    conn = self.connections[addr]
+                    conn.close()
+                    del self.connections[addr]
+                    del self.heartbeats_timestamps[addr]
 
 
     async def _update_health(self, address) -> None:
@@ -94,13 +96,14 @@ class Server:
         )
         send_log(f"Server listening on {self.host}:{self.port}", self, "debug")
         threading.Thread(target=self._evict_dead).start()
+        threading.Thread(target=self._send_heartbeats).start()
         async with server:
             await server.serve_forever()
 
     def send_command_client(self, command: str):
         cmd, addr, rest = self._digest_command(command)
         if addr not in self.connections:
-            send_command(f"Received bad command: {command}, client does not exist.")
+            send_command(f"Received bad command: {command}, client does not exist.", self)
             return
         writer = self.connections[addr]
         writer.write(" ".join([cmd, rest]).encode())
@@ -109,8 +112,7 @@ class Server:
     def get_clients(self):
         return list(self.connections.keys())
 
-    @staticmethod
-    def _digest_command(command) -> Tuple[str, str, str]:
+    def _digest_command(self, command) -> Tuple[str, str, str]:
         try:
             parts = command.split(" ")
             cmd = parts[0]
@@ -118,7 +120,7 @@ class Server:
             rest = " ".join(parts[2:])
             return cmd, addr, rest
         except Exception:
-            send_command(f"Received bad command: {command}, invalid format.")
+            send_command(f"Received bad command: {command}, invalid format.", self)
 
 
 server = Server(HOST, PORT)
