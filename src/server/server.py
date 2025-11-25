@@ -64,11 +64,6 @@ class Server:
         except Exception as e:
             send_log(f"Error with client {addr}: {e}", self, "debug")
 
-        finally:
-            writer.close()
-            await writer.wait_closed()
-            del self.connections[str(addr)]
-            send_log(f"Connection closed for {addr}", self, "debug")
 
     async def start_server(self):
         await self.rmq_interface.connect()
