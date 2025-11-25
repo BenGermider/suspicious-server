@@ -1,3 +1,6 @@
+import threading
+from datetime import datetime, timedelta
+
 import uvicorn
 import ssl
 import asyncio
@@ -29,6 +32,7 @@ class Server:
         self.host = host
         self.port = port
         self.connections: Dict[str, asyncio.StreamWriter] = {}
+        self.heartbeats_timestamps: Dict[str, datetime] = {}
         self.rmq_interface = RabbitMQInterface()
         self.context = self._ssl_context()
 
@@ -38,16 +42,30 @@ class Server:
         context.load_cert_chain(certfile="server.crt", keyfile="server.key")
         return context
 
-    async def heartbeats(self):
+    async def _send_heartbeats(self):
         while True:
             time.sleep(10)
-            alive = {}
-            for addr, writer in self.connections.items():
+            for writer in self.connections.values():
                 writer.write(b"heartbeat")
 
+    async def _evict_dead(self) -> None:
+        now = datetime.now()
+        timeout = timedelta(seconds=30)
+        for addr, last_alive in self.heartbeats_timestamps.items():
+            if now - last_alive > timeout:
+                conn = self.connections[addr]
+                conn.close()
+                del self.connections[addr]
+                del self.heartbeats_timestamps[addr]
+
+
+    async def _update_health(self, address) -> None:
+        self.heartbeats_timestamps[address] = datetime.now()
+
+
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        addr = writer.get_extra_info('peername')  # get ip
-        self.connections[str(addr)] = writer
+        addr = str(writer.get_extra_info('peername'))  # get ip
+        self.connections[addr] = writer
         send_log(f"Received connection from client {addr}", self, "debug")
 
         try:
@@ -58,8 +76,12 @@ class Server:
                 message = data.decode()
                 send_log(f"Received from {addr}: {message}", self, "debug")
 
+                if message == "alive":
+                    await self._update_health(addr)
+
                 if "command" in message:
                     send_command(command, self)
+
 
         except Exception as e:
             send_log(f"Error with client {addr}: {e}", self, "debug")
@@ -71,6 +93,7 @@ class Server:
             self.handle_client, self.host, self.port, ssl=self.context
         )
         send_log(f"Server listening on {self.host}:{self.port}", self, "debug")
+        threading.Thread(target=self._evict_dead).start()
         async with server:
             await server.serve_forever()
 
