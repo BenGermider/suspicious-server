@@ -1,6 +1,10 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-COPY client.py .
 
-ENTRYPOINT ["python", "client.py"]
+COPY ../../requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ../../src ./src
+
+ENTRYPOINT ["python", "src/client/client.py"]

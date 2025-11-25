@@ -47,7 +47,7 @@ class RabbitMQInterface:
 
         url = url.format(
             user=os.getenv("RABBITMQ_USER", "localhost"),
-            password=os.getenv("RABBITMQ_PASS", "admin"),
+            password=os.getenv("RABBITMQ_PASS", "12345"),
             port=os.getenv("RABBITMQ_PORT", 5672)
         )
         try:

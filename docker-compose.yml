@@ -2,16 +2,57 @@ version: "3.8"
 
 services:
   server:
-    build: ./server/
+    container_name: server
+    build: ./src/server
+    restart: always
     ports:
       - "8000:8000"
     networks:
       - c2
 
   client:
-    build: ./client/
+    container_name: client
+    build: ./src/client/
+    restart: always
     ports:
       - "8321:8321"
+    networks:
+      - c2
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: 12345
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASS: 12345
+      RABBITMQ_PORT: 5672
+    ports:
+      - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  database:
+    container_name: database
+    build: ./src/database/
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10 # Written by chat
+    container_name: es
+    restart: always
+    environment:
+      # Written by chat
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      # Written by chat
+      - esdata:/usr/share/elasticsearch/data
     networks:
       - c2
 
